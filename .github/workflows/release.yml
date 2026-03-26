@@ -36,7 +36,7 @@ jobs:
         run: rustup target add ${{ matrix.target }}
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} --features prod
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
@@ -57,6 +57,18 @@ jobs:
           else
             cp "target/${{ matrix.target }}/release/${PKG}" "dist/${PKG}_${{ matrix.target }}"
           fi
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          BINS="${{ steps.pkg.outputs.name }}"
+          for bin in $BINS; do
+            SRC="target/${{ matrix.target }}/release/${bin}"
+            if [ -f "${SRC}.exe" ]; then SRC="${SRC}.exe"; fi
+            if [ -f "$SRC" ]; then
+              cp "$SRC" "dist/$(basename $SRC)_${{ matrix.target }}"
+            fi
+          done
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
