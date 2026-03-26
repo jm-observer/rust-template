@@ -1,50 +1,54 @@
 # Agent Guidelines
 
-## Communication
+## 基本行为
+- 使用**中文**与用户交流
+- 遇到需求不明确时，主动提问，不自行假设
+- 修改现有代码前，先理解当前实现意图
+- 单次变更保持小而聚焦，不将重构混入功能修改
 
-- 使用**中文**与用户交流。
+## 项目概述
+Rust 异步应用程序。<!-- 补充具体业务功能描述 -->
 
-## Project Overview
+## 技术栈
 
-Rust 异步应用程序。具体功能描述请补充到这里。
+| 关注点      | 选型与约束 |
+|------------|-----------|
+| 异步运行时  | `tokio`（full features） |
+| 日志        | `log` 宏（`info!`、`error!` 等）；初始化用 `custom_utils::logger::logger_feature`；**禁止** `println!` 输出应用日志 |
+| HTTP 客户端 | `reqwest` + `rustls-tls`（无 OpenSSL 依赖）；始终用异步 `Client`，**禁止**阻塞 API |
+| 错误处理    | `anyhow::Result` + `?` 传播；需上下文时加 `.context("...")` |
+| 序列化      | `serde` + `serde_json` |
 
-## Tech Stack & Conventions
+## 代码结构
+- `src/main.rs`：只做运行时启动和日志初始化，保持精简
+- `src/lib.rs` 及子模块：承载所有业务逻辑；规模增长时拆分子模块，通过 `lib.rs` 统一导出
 
-- **Async runtime**: `tokio` (full features)。
-- **Logging**: 使用 `log` crate 的宏（`log::info!`、`log::error!` 等）。日志初始化通过 `custom_utils::logger::logger_feature`。禁止使用 `println!` 输出应用日志。
-- **HTTP client**: `reqwest`，使用 `rustls-tls` 后端（不依赖 OpenSSL）。始终使用异步 `reqwest::Client`，禁止使用阻塞 API。
-- **Error handling**: 应用层错误使用 `anyhow::Result`，通过 `?` 传播，必要时添加 `.context("...")`。
-- **Serialization**: `serde` + `serde_json`。
+## 代码质量
 
-## Code Structure
+**格式**：遵循 `rustfmt.toml`（120 列，4 空格缩进）和 `clippy.toml` 阈值。
 
-- 业务逻辑优先放在 `src/lib.rs` 及 `src/` 下的子模块中。`src/main.rs` 保持精简，只负责运行时启动和日志初始化。
-- 项目规模增长时，拆分为 `src/` 下的子模块，通过 `lib.rs` 统一导出。
+**错误处理**：
+- `lib.rs` 及子模块：禁止 `.unwrap()` / `.expect()`，一律用 `?` + `anyhow::Result`
+- `main.rs` 和测试代码：允许 `.unwrap()`
+- 禁止用 `#[allow(...)]` 压制警告；确有必要时须在注释中说明理由
 
-## Style
+**依赖管理**：
+- 未经用户明确同意，不得添加新依赖
+- 引入前评估必要性，优先选维护良好、传递依赖少的 crate
+- 不确定选型时，向用户列出候选方案及取舍，不自行决定
 
-- 遵循 `rustfmt.toml` 配置：最大行宽 120，4 空格缩进。
-- 遵循 `clippy.toml` 阈值配置。
-- 提交前执行 `cargo fmt --check` 验证格式。
+## 修复流程
+每次代码修改后，必须按以下循环执行，**全部通过才视为完成**：
 
-## Code Quality
+1. `cargo clippy --workspace -- -D warnings`
+2. `cargo fmt --check --all`
+3. `cargo test --workspace`
 
-- 使用 `cargo clippy -- -D warnings` 检查代码，所有 clippy 警告必须在提交前解决。
-- 禁止使用 `#[allow(...)]` 压制警告，除非有充分理由并在注释中说明。
-- 开发过程中优先使用 `cargo check` 快速验证编译。
+若任一步骤失败，继续修复并重新执行完整循环，直到三项全部通过。  
+**禁止在循环未完成时停下来，不得以"请你测试一下"结束任务。**
 
-## Dependencies
+> 所有命令均在 workspace 根目录执行，覆盖全部 crate。
 
-- 未经用户明确同意，不得添加新依赖。引入新 crate 前需评估必要性。
-- 优先选择维护良好、传递依赖少的 crate。
-
-## Error Handling
-
-- 库代码（`src/lib.rs` 及子模块）中禁止使用 `.unwrap()` 或 `.expect()`，使用 `?` 配合 `anyhow::Result`。
-- `.unwrap()` 仅允许在 `main.rs` 启动逻辑和测试中使用。
-
-## Build & Release
-
-- CI 构建两个目标：`x86_64-pc-windows-msvc` 和 `aarch64-unknown-linux-gnu`。
-- 通过推送 `v*` 标签触发 Release。
-- 推送标签前本地验证：`cargo clippy -- -D warnings && cargo fmt --check && cargo test`。
+## CI / 发布
+- 构建目标：`x86_64-pc-windows-msvc`、`aarch64-unknown-linux-gnu`
+- 推送 `v*` 标签触发 Release；推送前本地确认修复流程全部通过
